@@ -128,8 +128,11 @@ function nextRedoQuestion() {
   renderQuestion();
 }
 
-function newQuestion(tenseFilter) {
-  state.currentQuestion = generateQuestion(tenseFilter ? { tense: tenseFilter } : {});
+function newQuestion(tenseFilter, verbTypeFilter) {
+  state.currentQuestion = generateQuestion({
+    tense: tenseFilter || undefined,
+    verbType: verbTypeFilter || "all"
+  });
   state.answered = false;
   renderQuestion();
 }
@@ -179,7 +182,8 @@ function nextQuestion() {
     nextRedoQuestion();
   } else {
     const filter = getTenseFilter();
-    newQuestion(filter);
+    const verbType = getVerbTypeFilter();
+    newQuestion(filter, verbType);
   }
 }
 
@@ -288,7 +292,7 @@ function exitRedoMode() {
       <div id="feedback" class="feedback hidden"></div>
     </div>
   `;
-  newQuestion(getTenseFilter());
+  newQuestion(getTenseFilter(), getVerbTypeFilter());
   updateStats();
   updateErrorBadge();
 }
@@ -407,9 +411,14 @@ function getTenseFilter() {
   return select.value || null;
 }
 
+function getVerbTypeFilter() {
+  const select = document.getElementById("verb-type-filter");
+  return select ? select.value || "all" : "all";
+}
+
 function onFilterChange() {
   if (state.mode === "normal" && state.currentView === "practice") {
-    newQuestion(getTenseFilter());
+    newQuestion(getTenseFilter(), getVerbTypeFilter());
   }
 }
 
@@ -437,7 +446,7 @@ function initApp() {
   });
 
   // 初始状态
-  newQuestion(null);
+  newQuestion(null, getVerbTypeFilter());
   updateStats();
   updateErrorBadge();
 }

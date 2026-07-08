@@ -21,17 +21,22 @@ const TENSES = [
   { id:"imperativo",    label:"Imperativo" }
 ];
 
-// --- 提取词干 ---
+// --- 提取词干（支持自反动词）---
 function stem(it) {
+  // 自反动词词干：-arsi → -a, -ersi → -e, -irsi → -i
+  if (it.endsWith("arsi")) return it.slice(0, -4);   // alzarsi → alz
+  if (it.endsWith("ersi")) return it.slice(0, -4);   // sedersi → sed
+  if (it.endsWith("irsi")) return it.slice(0, -4);   // vestirsi → vest
   if (it.endsWith("are")) return it.slice(0, -3);
   if (it.endsWith("ere")) return it.slice(0, -3);
   if (it.endsWith("ire")) return it.slice(0, -3);
   if (it.endsWith("urre")) return it.slice(0, -3); // tradurre
   if (it.endsWith("porre")) return it.slice(0, -5); // comporre etc
-  if (it.endsWith("urre")) return it.slice(0, -3);
-  if (it.endsWith("urre")) return it.slice(0, -3);
   return it;
 }
+
+// --- 自反代词 ---
+const REFLEXIVE_PRONS = ["mi", "ti", "si", "ci", "vi", "si"];
 
 // ============================================
 // 主函数: conjugate(verb, tenseId, personId, gender?)
@@ -53,10 +58,16 @@ function conjugate(verb, tenseId, personId, gender) {
     const impIdx = idx - 1; // imp 数组没有 io
     if (impIdx >= 0 && verb.imp[impIdx]) return verb.imp[impIdx];
   }
-  // 自反动词 presente 统一处理
+  // 自反动词 presente 统一处理（无存储 pr 时自动计算）
   if (tenseId === "presente" && verb.reflexive) {
-    const s = verb.pr ? verb.pr[PERSONS.findIndex(p => p.id === personId)] : null;
-    if (s) return s;
+    if (verb.pr) {
+      const idx = PERSONS.findIndex(p => p.id === personId);
+      if (idx >= 0 && verb.pr[idx]) return verb.pr[idx];
+    }
+    // 自动计算：先算变位，再加代词
+    const form = conjugate({ ...verb, reflexive: false }, tenseId, personId, gender);
+    const pIdx = PERSONS.findIndex(p => p.id === personId);
+    return REFLEXIVE_PRONS[pIdx] + " " + form;
   }
 
   const type = verb.t;
@@ -112,6 +123,12 @@ function conjugate(verb, tenseId, personId, gender) {
       };
       let auxForm = (auxForms[aux] || auxForms["avere"])[pIdx];
 
+      // 自反动词：在助动词前加自反代词
+      let reflexivePrefix = "";
+      if (verb.reflexive) {
+        reflexivePrefix = REFLEXIVE_PRONS[pIdx] + " ";
+      }
+
       // 过去分词
       let pp = verb.pp || "";
       if (!pp) {
@@ -125,56 +142,50 @@ function conjugate(verb, tenseId, personId, gender) {
       // 用 essere 时，过去分词需与主语性数一致
       if (aux === "essere") {
         if (pIdx <= 2) {
-          // 单数: io/tu/lui → gender
           pp = pp.slice(0, -1) + (gender === "f" ? "a" : "o");
-        } else if (pIdx === 3) {
-          // noi: 默认用复数性
-          pp = pp.slice(0, -1) + (gender === "f" ? "e" : "i");
-        } else if (pIdx === 4) {
-          // voi: 默认用复数
-          pp = pp.slice(0, -1) + (gender === "f" ? "e" : "i");
         } else {
-          // loro
           pp = pp.slice(0, -1) + (gender === "f" ? "e" : "i");
         }
       }
 
-      return auxForm + " " + pp;
+      return reflexivePrefix + auxForm + " " + pp;
     }
 
     // ----- Imperfetto -----
     case "imperfetto": {
-      // 只有 essere 在 imf 中有特殊形式，已在 verb.imf 中处理
+      // 先处理存储的不规则形式
+      if (verb.imf) {
+        const idx = PERSONS.findIndex(p => p.id === personId);
+        let form = verb.imf[idx] || stem(verb.i);
+        if (verb.reflexive) form = REFLEXIVE_PRONS[pIdx] + " " + form;
+        return form;
+      }
       let s = verb.i.endsWith("urre") ? verb.i.slice(0, -3) :
               verb.i.endsWith("porre") ? verb.i.slice(0, -5) + "pon" :
               stem(verb.i);
       if (type === "are") {
         const endings = ["avo","avi","ava","avamo","avate","avano"];
-        return s + endings[pIdx];
+        return (verb.reflexive ? REFLEXIVE_PRONS[pIdx] + " " : "") + s + endings[pIdx];
       }
       if (type === "ere" || type === "irregular") {
         const endings = ["evo","evi","eva","evamo","evate","evano"];
-        return s + endings[pIdx];
+        return (verb.reflexive ? REFLEXIVE_PRONS[pIdx] + " " : "") + s + endings[pIdx];
       }
       if (type === "ire" || type === "ire-isc") {
         const endings = ["ivo","ivi","iva","ivamo","ivate","ivano"];
-        return s + endings[pIdx];
+        return (verb.reflexive ? REFLEXIVE_PRONS[pIdx] + " " : "") + s + endings[pIdx];
       }
       return s + "eva"; // fallback
     }
 
     // ----- Imperativo -----
     case "imperativo": {
-      // Imperativo 只有 tu/lui/noi/voi/loro 五种形式，但同一人称系统
-      // 对于 io 或不存在的人称，标记为不可用
       if (personId === "io") return "(—)";
 
       // 先查存储的不规则形式
-      // 注意: imp 数组索引 = [tu, lui, noi, voi, loro], 而 PERSONS 索引 = [io, tu, lui, noi, voi, loro]
-      // 所以 imp 索引 = PERSONS 索引 - 1
       if (verb.imp) {
         const idx = PERSONS.findIndex(p => p.id === personId);
-        const impIdx = idx - 1; // imp 数组没有 io
+        const impIdx = idx - 1;
         if (impIdx >= 0 && verb.imp[impIdx]) return verb.imp[impIdx];
       }
 
@@ -182,44 +193,51 @@ function conjugate(verb, tenseId, personId, gender) {
                 verb.i.endsWith("porre") ? verb.i.slice(0, -5) + "pon" :
                 stem(verb.i);
 
-      // Lei (3a s): 用 congiuntivo presente
-      // Noi (1a p): 同 presente
-      // Voi (2a p): 同 presente
-      // Loro (3a p): 用 congiuntivo presente
+      if (pIdx === 0) return "(—)";
 
-      if (pIdx === 0) return "(—)"; // io 无命令式
+      // 计算基本命令式形式（不含代词）
+      let base = "";
 
       if (type === "are") {
-        if (pIdx === 1) return s + "a";       // tu
-        if (pIdx === 2) return s + "i";       // lui (Lei)
-        if (pIdx === 3) return s + "iamo";    // noi
-        if (pIdx === 4) return s + "ate";     // voi
-        if (pIdx === 5) return s + "ino";     // loro
+        if (pIdx === 1) base = s + "a";
+        else if (pIdx === 2) base = s + "i";
+        else if (pIdx === 3) base = s + "iamo";
+        else if (pIdx === 4) base = s + "ate";
+        else if (pIdx === 5) base = s + "ino";
+      } else if (type === "ere") {
+        if (pIdx === 1) base = s + "i";
+        else if (pIdx === 2) base = s + "a";
+        else if (pIdx === 3) base = s + "iamo";
+        else if (pIdx === 4) base = s + "ete";
+        else if (pIdx === 5) base = s + "ano";
+      } else if (type === "ire") {
+        if (pIdx === 1) base = s + "i";
+        else if (pIdx === 2) base = s + "a";
+        else if (pIdx === 3) base = s + "iamo";
+        else if (pIdx === 4) base = s + "ite";
+        else if (pIdx === 5) base = s + "ano";
+      } else if (type === "ire-isc") {
+        if (pIdx === 1) base = s + "isci";
+        else if (pIdx === 2) base = s + "isca";
+        else if (pIdx === 3) base = s + "iamo";
+        else if (pIdx === 4) base = s + "ite";
+        else if (pIdx === 5) base = s + "iscano";
+      } else {
+        // irregular fallback
+        const pr = conjugate({ ...verb, reflexive: false }, "presente", personId, gender);
+        base = pr;
       }
-      if (type === "ere") {
-        if (pIdx === 1) return s + "i";       // tu
-        if (pIdx === 2) return s + "a";       // lui
-        if (pIdx === 3) return s + "iamo";    // noi
-        if (pIdx === 4) return s + "ete";     // voi
-        if (pIdx === 5) return s + "ano";     // loro
+
+      // 自反动词：添加代词
+      if (verb.reflexive) {
+        if (pIdx === 1) return base + "ti";           // tu: alza + ti = alzati
+        if (pIdx === 2) return "si " + base;          // lui: si alzi
+        if (pIdx === 3) return s + "iamoci";          // noi: alziamo + ci = alziamoci
+        if (pIdx === 4) return base + "vi";           // voi: alzate + vi = alzatevi
+        if (pIdx === 5) return "si " + base;          // loro: si alzino
       }
-      if (type === "ire") {
-        if (pIdx === 1) return s + "i";       // tu
-        if (pIdx === 2) return s + "a";       // lui
-        if (pIdx === 3) return s + "iamo";    // noi
-        if (pIdx === 4) return s + "ite";     // voi
-        if (pIdx === 5) return s + "ano";     // loro
-      }
-      if (type === "ire-isc") {
-        if (pIdx === 1) return s + "isci";    // tu
-        if (pIdx === 2) return s + "isca";    // lui
-        if (pIdx === 3) return s + "iamo";    // noi
-        if (pIdx === 4) return s + "ite";     // voi
-        if (pIdx === 5) return s + "iscano";  // loro
-      }
-      // irregular fallback - 用 presente
-      const pr = conjugate(verb, "presente", personId, gender);
-      return pr;
+
+      return base;
     }
 
     default:
@@ -227,18 +245,42 @@ function conjugate(verb, tenseId, personId, gender) {
   }
 }
 
+// --- 判断动词是否为不规则（用于筛选）---
+function isIrregular(verb) {
+  // t === "irregular" 肯定是
+  if (verb.t === "irregular") return true;
+  // 有存储的 imf（不规则 imperfetto）也算
+  if (verb.imf) return true;
+  // 有存储的 imp（不规则 imperativo）也算
+  if (verb.imp) return true;
+  // 过去分词不规则的 -ere（有 pp 且不是规则 -uto 结尾）
+  if (verb.t === "ere" && verb.pp && !verb.pp.endsWith("uto") && !verb.pp.endsWith("uto")) return true;
+  // 过去分词不规则的 -ire（有 pp 且不是规则 -ito 结尾）
+  if ((verb.t === "ire" || verb.t === "ire-isc") && verb.pp && !verb.pp.endsWith("ito")) return true;
+  return false;
+}
+
 // --- 生成一道题目数据 ---
 function generateQuestion(opts) {
   // opts: { tense?: "presente"|"passato_prossimo"|"imperfetto"|"imperativo",
   //         verb?: verbObject,
+  //         verbType?: "all"|"irregular"|"regular",
   //         onlyErrors?: boolean }
-  
+
   // 选择动词
   let verb;
   if (opts && opts.verb) {
     verb = opts.verb;
   } else {
-    verb = VERBS[Math.floor(Math.random() * VERBS.length)];
+    let pool = VERBS;
+    if (opts && opts.verbType === "irregular") {
+      pool = VERBS.filter(v => isIrregular(v));
+    } else if (opts && opts.verbType === "regular") {
+      pool = VERBS.filter(v => !isIrregular(v));
+    }
+    // 避免空池（极端情况全部被筛掉了）
+    if (pool.length === 0) pool = VERBS;
+    verb = pool[Math.floor(Math.random() * pool.length)];
   }
 
   // 选择时态

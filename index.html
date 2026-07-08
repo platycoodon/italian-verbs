@@ -580,7 +580,12 @@
           <div>
             <span class="mode-tag" id="mode-tag">📖 普通练习</span>
           </div>
-          <div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <select id="verb-type-filter" onchange="onFilterChange()" style="font-size:14px;padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--white);font-family:var(--font);">
+              <option value="all">🎲 全部动词</option>
+              <option value="irregular">⚡ 不规则动词</option>
+              <option value="regular">📗 规则动词</option>
+            </select>
             <select id="tense-filter" onchange="onFilterChange()">
               <option value="">🎲 全部时态</option>
               <option value="presente">Indicativo Presente</option>

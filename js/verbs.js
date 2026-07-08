@@ -149,6 +149,16 @@ const VERBS = [
   { i:"accorgersi", t:"ire",  a:"essere",  pp:"accorto", reflexive:true,
     pr:["mi accorgo","ti accorgi","si accorge","ci accorgiamo","vi accorgete","si accorgono"] },
 
+  // ========== 规则自反动词（8 个，常用）==========
+  { i:"alzarsi",     t:"are",  a:"essere",  pp:"alzato",   reflexive:true },
+  { i:"lavarsi",     t:"are",  a:"essere",  pp:"lavato",   reflexive:true },
+  { i:"chiamarsi",   t:"are",  a:"essere",  pp:"chiamato", reflexive:true },
+  { i:"fermarsi",    t:"are",  a:"essere",  pp:"fermato",  reflexive:true },
+  { i:"prepararsi",  t:"are",  a:"essere",  pp:"preparato",reflexive:true },
+  { i:"rilassarsi",  t:"are",  a:"essere",  pp:"rilassato",reflexive:true },
+  { i:"annoiarsi",   t:"are",  a:"essere",  pp:"annoiato", reflexive:true },
+  { i:"allenarsi",   t:"are",  a:"essere",  pp:"allenato", reflexive:true },
+
   // ========== 规则动词（55 个，B1 常用）==========
   // --- 规则 -are (20) ---
   { i:"parlare",    t:"are",  a:"avere",  pp:"parlato" },
