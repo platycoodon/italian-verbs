@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verbi Italiani · 动词变位练习</title>
+  <style>
+    /* ============================================
+       黑白设计 · 第一版 × 0.8
+       ============================================ */
+
+    :root {
+      --black: #000000;
+      --white: #ffffff;
+      --gray-100: #f5f5f5;
+      --gray-200: #e5e5e5;
+      --gray-300: #cccccc;
+      --gray-400: #999999;
+      --gray-500: #666666;
+      --gray-600: #444444;
+      --gray-700: #222222;
+      --bg: #fafafa;
+      --card-bg: #ffffff;
+      --text: #111111;
+      --text-muted: #888888;
+      --border: #dddddd;
+      --shadow: 0 2px 10px rgba(0,0,0,0.07);
+      --radius: 14px;
+      --radius-sm: 7px;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* --- 头部 --- */
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      padding: 22px 34px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+
+    .logo h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+    }
+    .logo .sub {
+      font-size: 14px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    /* --- Tab 导航 --- */
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      background: var(--white);
+      padding: 0 34px;
+    }
+
+    .tab-btn {
+      padding: 14px 29px;
+      font-size: 17px;
+      font-weight: 500;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+      font-family: var(--font);
+      position: relative;
+    }
+
+    .tab-btn:hover {
+      color: var(--text);
+      background: var(--gray-100);
+    }
+
+    .tab-btn.active {
+      color: var(--black);
+      border-bottom-color: var(--black);
+      font-weight: 600;
+    }
+
+    .tab-btn .badge {
+      display: inline-block;
+      background: var(--black);
+      color: var(--white);
+      font-size: 12px;
+      padding: 2px 9px;
+      border-radius: 11px;
+      margin-left: 5px;
+      font-weight: 600;
+      vertical-align: top;
+    }
+
+    /* --- 统计栏 --- */
+    .stats-bar {
+      display: flex;
+      gap: 34px;
+      padding: 12px 34px;
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      font-size: 16px;
+    }
+
+    .stats-bar .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .stats-bar .stat-num {
+      font-weight: 700;
+      min-width: 24px;
+    }
+
+    /* --- 主体 --- */
+    .main {
+      flex: 1;
+      max-width: 864px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 34px 29px;
+    }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* --- 卡片 --- */
+    .card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 38px 34px;
+      border: 1px solid var(--border);
+    }
+
+    /* ============================================
+       视图 1：练习区
+       ============================================ */
+
+    .practice-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 34px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .practice-controls select,
+    .practice-controls button {
+      padding: 10px 17px;
+      border-radius: var(--radius-sm);
+      font-size: 16px;
+      border: 1px solid var(--border);
+      background: var(--white);
+      cursor: pointer;
+      transition: all 0.1s;
+      font-family: var(--font);
+    }
+
+    .practice-controls select:hover,
+    .practice-controls button:hover {
+      border-color: var(--gray-400);
+    }
+
+    .practice-controls .btn-clear {
+      color: var(--text-muted);
+    }
+
+    .mode-tag {
+      font-size: 14px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    .mode-tag.redo {
+      border-color: var(--black);
+      color: var(--black);
+      background: var(--gray-100);
+    }
+
+    .question-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 29px;
+    }
+
+    .verb-display {
+      font-size: 41px;
+      font-weight: 700;
+      letter-spacing: -0.6px;
+    }
+
+    .tense-display {
+      font-size: 17px;
+      color: var(--text-muted);
+      background: var(--gray-100);
+      padding: 4px 14px;
+      border-radius: 5px;
+    }
+
+    .question-body { text-align: center; }
+
+    .prompt-label {
+      display: block;
+      font-size: 22px;
+      color: var(--text-muted);
+      margin-bottom: 17px;
+    }
+
+    .prompt-label .gender-hint {
+      font-size: 16px;
+      color: var(--gray-500);
+    }
+
+    #answer-input {
+      width: 100%;
+      max-width: 408px;
+      font-size: 31px;
+      padding: 17px 19px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
+      text-align: center;
+      font-family: var(--font);
+      transition: border-color 0.15s;
+      outline: none;
+      background: var(--white);
+    }
+
+    #answer-input:focus {
+      border-color: var(--black);
+    }
+
+    #answer-input:disabled {
+      background: var(--gray-100);
+      color: var(--text-muted);
+    }
+
+    .btn-group {
+      margin-top: 24px;
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 14px 34px;
+      border-radius: var(--radius-sm);
+      font-size: 18px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.1s;
+      font-family: var(--font);
+    }
+
+    .btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--black);
+      color: var(--white);
+      border-color: var(--black);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--gray-700);
+      border-color: var(--gray-700);
+    }
+
+    .btn-secondary {
+      background: var(--white);
+      color: var(--text);
+    }
+
+    .btn-secondary:hover {
+      background: var(--gray-100);
+    }
+
+    .feedback {
+      margin-top: 29px;
+      padding: 22px 24px;
+      border-radius: var(--radius-sm);
+      font-size: 19px;
+      line-height: 1.7;
+      text-align: center;
+      border: 2px solid;
+    }
+
+    .feedback.hidden { display: none; }
+
+    .feedback.correct {
+      background: var(--gray-100);
+      color: var(--text);
+      border-color: var(--black);
+    }
+
+    .feedback.wrong {
+      background: var(--gray-100);
+      color: var(--text);
+      border-color: var(--black);
+    }
+
+    .feedback strong {
+      font-size: 22px;
+    }
+
+    .feedback s {
+      text-decoration: line-through;
+      opacity: 0.5;
+    }
+
+    .feedback .icon-correct { font-weight: 700; }
+    .feedback .icon-wrong { font-weight: 700; }
+
+    /* --- 重做完成 --- */
+    .redo-complete {
+      text-align: center;
+      padding: 48px 0;
+    }
+
+    .redo-complete h2 {
+      font-size: 29px;
+      margin-bottom: 10px;
+    }
+
+    .redo-complete p {
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      font-size: 19px;
+    }
+
+    .redo-stats {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      margin-bottom: 29px;
+      font-size: 19px;
+      font-weight: 600;
+    }
+
+    /* ============================================
+       视图 2：错题本
+       ============================================ */
+
+    .error-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .error-toolbar h2 {
+      font-size: 19px;
+      font-weight: 700;
+    }
+
+    .error-toolbar .error-count-label {
+      font-size: 16px;
+      color: var(--text-muted);
+      font-weight: 400;
+      margin-left: 7px;
+    }
+
+    .error-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .error-actions button {
+      padding: 10px 19px;
+      border-radius: var(--radius-sm);
+      font-size: 16px;
+      border: 1px solid var(--border);
+      background: var(--white);
+      cursor: pointer;
+      transition: all 0.1s;
+      font-family: var(--font);
+      font-weight: 500;
+    }
+
+    .error-actions button:hover {
+      border-color: var(--gray-400);
+      background: var(--gray-100);
+    }
+
+    .error-actions .btn-danger {
+      color: var(--text-muted);
+    }
+
+    .error-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .error-empty {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 58px 0;
+      font-size: 18px;
+    }
+
+    .error-empty .big-icon {
+      font-size: 58px;
+      display: block;
+      margin-bottom: 14px;
+    }
+
+    .error-item {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 17px 19px;
+      background: var(--white);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      transition: background 0.1s;
+    }
+
+    .error-item:hover {
+      background: var(--gray-100);
+    }
+
+    .error-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .error-verb {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 5px;
+    }
+
+    .error-verb-name {
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    .error-tag {
+      font-size: 14px;
+      color: var(--text-muted);
+      background: var(--gray-100);
+      padding: 2px 9px;
+      border-radius: 4px;
+      border: 1px solid var(--gray-200);
+    }
+
+    .error-person-tag {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .error-attempt {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 17px;
+    }
+
+    .error-wrong-ans {
+      text-decoration: line-through;
+      color: var(--text-muted);
+    }
+
+    .error-arrow-icon {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .error-right-ans {
+      font-weight: 700;
+    }
+
+    .error-redo-btn {
+      padding: 7px 17px;
+      border-radius: 5px;
+      font-size: 14px;
+      font-weight: 600;
+      border: 1px solid var(--black);
+      background: var(--white);
+      cursor: pointer;
+      transition: all 0.1s;
+      font-family: var(--font);
+      white-space: nowrap;
+    }
+
+    .error-redo-btn:hover {
+      background: var(--black);
+      color: var(--white);
+    }
+
+    .error-time {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* --- 响应式 --- */
+    @media (max-width: 640px) {
+      .header { padding: 14px 19px; }
+      .tabs { padding: 0 19px; }
+      .tab-btn { padding: 10px 14px; font-size: 14px; }
+      .main { padding: 19px 13px; }
+      .card { padding: 22px 16px; }
+      .verb-display { font-size: 29px; }
+      #answer-input { font-size: 22px; max-width: 100%; }
+      .practice-controls { flex-direction: column; align-items: stretch; }
+      .error-item { flex-direction: column; align-items: stretch; }
+      .error-redo-btn { align-self: flex-end; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 头部 -->
+  <header class="header">
+    <div class="logo">
+      <h1>Verbi Italiani</h1>
+      <span class="sub">B1 · 变位练习</span>
+    </div>
+  </header>
+
+  <!-- Tab 导航 -->
+  <nav class="tabs" role="tablist">
+    <button class="tab-btn active" data-view="practice" onclick="switchView('practice')">📝 练习</button>
+    <button class="tab-btn" data-view="errors" onclick="switchView('errors')">
+      📓 错题本 <span class="badge" id="tab-error-count">0</span>
+    </button>
+  </nav>
+
+  <!-- 统计栏 -->
+  <div class="stats-bar" id="stats-bar">
+    <div class="stat-item">📝 总题数 <span class="stat-num" id="total-count">0</span></div>
+    <div class="stat-item">✓ 正确 <span class="stat-num" id="correct-count">0</span></div>
+    <div class="stat-item">◉ 正确率 <span class="stat-num" id="accuracy-rate">0%</span></div>
+  </div>
+
+  <!-- 主体 -->
+  <div class="main">
+
+    <!-- ========== 视图 1：练习 ========== -->
+    <div class="view active" id="view-practice">
+      <div class="card">
+        <div class="practice-controls">
+          <div>
+            <span class="mode-tag" id="mode-tag">📖 普通练习</span>
+          </div>
+          <div>
+            <select id="tense-filter" onchange="onFilterChange()">
+              <option value="">🎲 全部时态</option>
+              <option value="presente">Indicativo Presente</option>
+              <option value="passato_prossimo">Passato Prossimo</option>
+              <option value="imperfetto">Imperfetto</option>
+              <option value="imperativo">Imperativo</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="question-area">
+          <div class="question-header">
+            <span class="verb-display" id="verb-display"></span>
+            <span class="tense-display" id="tense-display"></span>
+          </div>
+          <div class="question-body">
+            <span class="prompt-label" id="prompt-label">—</span>
+            <input type="text" id="answer-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="输入变位...">
+            <div class="btn-group">
+              <button id="submit-btn" class="btn btn-primary" onclick="handleSubmit()">提交</button>
+              <button id="next-btn" class="btn btn-secondary" style="display:none" onclick="nextQuestion()">下一题 →</button>
+            </div>
+            <div id="feedback" class="feedback hidden"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 视图 2：错题本 ========== -->
+    <div class="view" id="view-errors">
+      <div class="card">
+        <div class="error-toolbar">
+          <h2>📓 错题本 <span class="error-count-label" id="error-count-label">共 0 题</span></h2>
+          <div class="error-actions">
+            <button onclick="redoAllFromErrorView()">🔄 重做全部</button>
+            <button class="btn-danger" onclick="if(confirm('确定清除所有错题记录？')){clearErrors();refreshErrorView();}">🗑 清空</button>
+          </div>
+        </div>
+        <div class="error-list" id="error-list">
+          <div class="error-empty"><span class="big-icon">🎉</span>暂无错题</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="js/verbs.js"></script>
+  <script src="js/conjugator.js"></script>
+  <script src="js/app.js"></script>
+
+  <script>
+    window.addEventListener("DOMContentLoaded", initApp);
+  </script>
+</body>
+</html>
