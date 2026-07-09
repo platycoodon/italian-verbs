@@ -163,7 +163,8 @@ function conjugate(verb, tenseId, personId, gender) {
       let s = verb.i.endsWith("urre") ? verb.i.slice(0, -3) :
               verb.i.endsWith("porre") ? verb.i.slice(0, -5) + "pon" :
               stem(verb.i);
-      if (type === "are") {
+      // 对 irregulare 动词：按不定式词尾选择正确的 imperfetto 词尾
+      if (type === "are" || (type === "irregular" && verb.i.endsWith("are"))) {
         const endings = ["avo","avi","ava","avamo","avate","avano"];
         return (verb.reflexive ? REFLEXIVE_PRONS[pIdx] + " " : "") + s + endings[pIdx];
       }
