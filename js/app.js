@@ -1,91 +1,91 @@
-// ============================================================
-// 应用逻辑 — 双视图：练习 / 错题本
-// ============================================================
+// 应用逻辑 — 调后端 API，localStorage 兜底
 
-// --- 状态 ---
+import * as api from './api.js';
+
+// ── 状态 ──
 let state = {
   currentQuestion: null,
   totalAttempts: 0,
   correctCount: 0,
-  mode: "normal",        // "normal" | "redo"
-  errorQueue: [],         // 重做队列
+  mode: "normal",
+  errorQueue: [],
   currentRedoIndex: 0,
   answered: false,
-  currentView: "practice" // "practice" | "errors"
+  currentView: "practice",
+  loading: false,
+  user: null
 };
 
 const STORAGE_KEY = "italian_verb_errors";
 
-// ============================================
-// 本地存储
-// ============================================
-
-function loadErrors() {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch (e) { return []; }
+// ── localStorage 兜底（未登录时用）──
+function loadLocalErrors() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch { return []; }
 }
-
-function saveErrors(errors) {
+function saveLocalErrors(errors) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(errors));
 }
-
-function addErrorRecord(record) {
-  const errors = loadErrors();
+function addLocalError(record) {
+  const errors = loadLocalErrors();
   record.timestamp = Date.now();
   errors.push(record);
-  saveErrors(errors);
+  saveLocalErrors(errors);
+}
+function removeLocalError(index) {
+  const errors = loadLocalErrors();
+  if (index >= 0 && index < errors.length) { errors.splice(index, 1); saveLocalErrors(errors); return true; }
+  return false;
+}
+function clearLocalErrors() { saveLocalErrors([]); }
+
+// ── 统一错误操作 ──
+async function loadErrors() {
+  if (api.isLoggedIn()) {
+    try { return await api.getErrors(); } catch {}
+  }
+  return loadLocalErrors();
 }
 
-function clearErrors() {
-  saveErrors([]);
+async function addErrorRecord(record) {
+  if (api.isLoggedIn()) {
+    try {
+      const result = await api.addError(record);
+      if (result) record.id = result.id;
+      return;
+    } catch {}
+  }
+  addLocalError(record);
+}
+
+async function removeErrorRecord(idOrIndex, isLocal) {
+  if (!isLocal && api.isLoggedIn()) {
+    try { await api.deleteError(idOrIndex); return true; } catch {}
+  }
+  return removeLocalError(idOrIndex);
+}
+
+async function clearAllErrors() {
+  if (api.isLoggedIn()) { try { await api.clearAllErrors(); } catch {} }
+  clearLocalErrors();
   updateErrorBadge();
 }
 
-function removeErrorRecord(index) {
-  const errors = loadErrors();
-  if (index >= 0 && index < errors.length) {
-    errors.splice(index, 1);
-    saveErrors(errors);
-    return true;
-  }
-  return false;
-}
-
-// ============================================
-// 视图切换
-// ============================================
-
+// ── 视图切换 ──
 function switchView(viewId) {
   state.currentView = viewId;
-
-  // 切换 tab 按钮状态
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
   document.querySelector(`.tab-btn[data-view="${viewId}"]`).classList.add("active");
-
-  // 切换视图面板
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   document.getElementById(`view-${viewId}`).classList.add("active");
-
-  // 统计栏只在练习视图显示
   document.getElementById("stats-bar").style.display = viewId === "practice" ? "flex" : "none";
-
-  if (viewId === "errors") {
-    refreshErrorView();
-  }
+  if (viewId === "errors") refreshErrorView();
 }
+window.switchView = switchView;
 
-// ============================================
-// 答题核心逻辑
-// ============================================
-
-function enterRedoMode() {
-  const errors = loadErrors();
-  if (errors.length === 0) {
-    alert("🎉 错题本为空！");
-    return false;
-  }
+// ── 重做 ──
+async function enterRedoMode() {
+  const errors = await loadErrors();
+  if (errors.length === 0) { alert("🎉 错题本为空！"); return false; }
   state.mode = "redo";
   state.errorQueue = [...errors];
   state.currentRedoIndex = 0;
@@ -93,29 +93,17 @@ function enterRedoMode() {
   state.correctCount = 0;
   state.answered = false;
   nextRedoQuestion();
-
-  // 切到练习视图
   switchView("practice");
   return true;
 }
+window.enterRedoMode = enterRedoMode;
 
 function nextRedoQuestion() {
-  if (state.currentRedoIndex >= state.errorQueue.length) {
-    showRedoComplete();
-    return;
-  }
-
+  if (state.currentRedoIndex >= state.errorQueue.length) { showRedoComplete(); return; }
   const err = state.errorQueue[state.currentRedoIndex];
-  const verb = findVerb(err.verbInfinitive);
-  if (!verb) {
-    state.currentRedoIndex++;
-    nextRedoQuestion();
-    return;
-  }
-
-  const person = PERSONS.find(p => p.id === err.personId);
+  const person = { id: err.personId, label: err.personLabel };
   state.currentQuestion = {
-    verb: verb,
+    verbInfinitive: err.verbInfinitive,
     tenseId: err.tenseId,
     tenseLabel: err.tenseLabel,
     person: person,
@@ -128,48 +116,81 @@ function nextRedoQuestion() {
   renderQuestion();
 }
 
-function newQuestion(tenseFilter, verbTypeFilter) {
-  state.currentQuestion = generateQuestion({
-    tense: tenseFilter || undefined,
-    verbType: verbTypeFilter || "all"
-  });
-  state.answered = false;
-  renderQuestion();
+async function handleNewQuestion(tenseFilter, verbTypeFilter) {
+  state.loading = true;
+  setLoadingUI(true);
+  try {
+    const data = await api.getQuestion(tenseFilter || undefined, verbTypeFilter || 'all');
+    state.currentQuestion = {
+      verbInfinitive: data.verbInfinitive,
+      tenseId: data.tenseId,
+      tenseLabel: data.tenseLabel,
+      person: data.person,
+      gender: data.gender || "m",
+      answer: data.answer
+    };
+    state.answered = false;
+    renderQuestion();
+  } catch (err) {
+    document.getElementById("verb-display").textContent = "⚠️ 连接失败";
+    document.getElementById("feedback").className = "feedback wrong";
+    document.getElementById("feedback").innerHTML = `无法连接到服务器，请确保后端已启动。<br><small>${err.message}</small>`;
+    document.getElementById("feedback").style.display = '';
+    document.getElementById("submit-btn").disabled = true;
+  }
+  state.loading = false;
+  setLoadingUI(false);
 }
 
-function checkAnswer(userInput) {
-  if (state.answered) return;
-  if (!state.currentQuestion) return;
+function setLoadingUI(loading) {
+  const btn = document.getElementById("submit-btn");
+  const input = document.getElementById("answer-input");
+  if (loading) {
+    if (btn) btn.disabled = true;
+    if (input) input.disabled = true;
+  }
+}
 
+async function checkAnswer(userInput) {
+  if (state.answered || state.loading || !state.currentQuestion) return;
   const q = state.currentQuestion;
-  const trimmed = userInput.trim().toLowerCase();
-  const correct = q.answer.trim().toLowerCase();
-  const isCorrect = trimmed === correct;
+  if (q.verbInfinitive === "⚠️") return;
 
   state.totalAttempts++;
   state.answered = true;
 
-  if (isCorrect) {
-    state.correctCount++;
-    showFeedback(true, q.answer);
-    if (state.mode === "redo") {
-      removeErrorRecord(q.errorIndex);
+  try {
+    const result = await api.checkAnswer(q.verbInfinitive, q.tenseId, q.person.id, q.gender, userInput);
+    const isCorrect = result.isCorrect;
+    const correctAnswer = result.correctAnswer;
+
+    if (isCorrect) {
+      state.correctCount++;
+      showFeedback(true, correctAnswer);
+      if (state.mode === "redo") {
+        if (q.errorRecord && q.errorRecord.id) {
+          await removeErrorRecord(q.errorRecord.id, false);
+        } else {
+          removeLocalError(q.errorIndex);
+        }
+      }
+    } else {
+      showFeedback(false, correctAnswer, userInput.trim());
+      if (state.mode !== "redo") {
+        await addErrorRecord({
+          verbInfinitive: q.verbInfinitive,
+          tenseId: q.tenseId,
+          tenseLabel: q.tenseLabel,
+          personId: q.person.id,
+          personLabel: q.person.label,
+          gender: q.gender,
+          userAnswer: userInput.trim().toLowerCase(),
+          correctAnswer: correctAnswer
+        });
+      }
     }
-  } else {
-    showFeedback(false, q.answer, trimmed);
-    if (state.mode !== "redo") {
-      const record = {
-        verbInfinitive: q.verb.i,
-        tenseId: q.tenseId,
-        tenseLabel: q.tenseLabel,
-        personId: q.person.id,
-        personLabel: q.person.label,
-        gender: q.gender,
-        userAnswer: trimmed,
-        correctAnswer: q.answer
-      };
-      addErrorRecord(record);
-    }
+  } catch (err) {
+    showFeedback(false, q.answer, userInput.trim());
   }
 
   updateStats();
@@ -181,46 +202,33 @@ function nextQuestion() {
     state.currentRedoIndex++;
     nextRedoQuestion();
   } else {
-    const filter = getTenseFilter();
-    const verbType = getVerbTypeFilter();
-    newQuestion(filter, verbType);
+    handleNewQuestion(getTenseFilter(), getVerbTypeFilter());
   }
 }
+window.nextQuestion = nextQuestion;
 
-// ============================================
-// 界面渲染 — 练习
-// ============================================
-
+// ── UI 渲染 ──
 function renderQuestion() {
   const q = state.currentQuestion;
   if (!q) return;
 
-  const verbDisplay = document.getElementById("verb-display");
-  const tenseDisplay = document.getElementById("tense-display");
-  const promptLabel = document.getElementById("prompt-label");
-  const answerInput = document.getElementById("answer-input");
-  const submitBtn = document.getElementById("submit-btn");
-  const nextBtn = document.getElementById("next-btn");
-  const feedbackArea = document.getElementById("feedback");
-
-  verbDisplay.textContent = q.verb.i;
-  tenseDisplay.textContent = q.tenseLabel;
+  document.getElementById("verb-display").textContent = q.verbInfinitive;
+  document.getElementById("tense-display").textContent = q.tenseLabel;
 
   let genderHint = "";
-  if (q.tenseId === "passato_prossimo" && q.verb.a === "essere") {
+  if (q.tenseId === "passato_prossimo" && q.tenseId) {
+    // 简单判断用 essere 的动词（后端会处理，前端只展示性别提示）
     genderHint = q.gender === "f" ? " (f)" : " (m)";
   }
-  promptLabel.textContent = q.person.label + genderHint;
+  document.getElementById("prompt-label").textContent = q.person.label + genderHint;
 
-  answerInput.value = "";
-  answerInput.disabled = false;
-  answerInput.focus();
-  submitBtn.disabled = false;
-  nextBtn.style.display = "none";
-  feedbackArea.className = "feedback hidden";
-  feedbackArea.textContent = "";
+  const input = document.getElementById("answer-input");
+  input.value = ""; input.disabled = false; input.focus();
+  document.getElementById("submit-btn").disabled = false;
+  document.getElementById("next-btn").style.display = "none";
+  document.getElementById("feedback").className = "feedback hidden";
+  document.getElementById("feedback").textContent = "";
 
-  // 标记模式标签
   const tag = document.getElementById("mode-tag");
   if (state.mode === "redo") {
     tag.textContent = `🔄 重做中 (${state.currentRedoIndex + 1}/${state.errorQueue.length})`;
@@ -232,31 +240,22 @@ function renderQuestion() {
 }
 
 function showFeedback(isCorrect, correctAnswer, userAnswer) {
-  const feedbackArea = document.getElementById("feedback");
-  const answerInput = document.getElementById("answer-input");
-  const submitBtn = document.getElementById("submit-btn");
-  const nextBtn = document.getElementById("next-btn");
+  document.getElementById("answer-input").disabled = true;
+  document.getElementById("submit-btn").disabled = true;
+  document.getElementById("next-btn").style.display = "inline-block";
 
-  answerInput.disabled = true;
-  submitBtn.disabled = true;
-  nextBtn.style.display = "inline-block";
-
+  const fb = document.getElementById("feedback");
   if (isCorrect) {
-    feedbackArea.className = "feedback correct";
-    feedbackArea.innerHTML = `<span class="icon-correct">✓</span> 正确！<br><strong>${correctAnswer}</strong>`;
+    fb.className = "feedback correct";
+    fb.innerHTML = `✓ 正确！<br><strong>${correctAnswer}</strong>`;
   } else {
-    feedbackArea.className = "feedback wrong";
-    feedbackArea.innerHTML = `
-      <span class="icon-wrong">✗</span> 错误<br>
-      你的答案：<s>${userAnswer}</s><br>
-      正确答案：<strong>${correctAnswer}</strong>
-    `;
+    fb.className = "feedback wrong";
+    fb.innerHTML = `✗ 错误<br>你的答案：<s>${userAnswer}</s><br>正确答案：<strong>${correctAnswer}</strong>`;
   }
 }
 
 function showRedoComplete() {
-  const container = document.getElementById("question-area");
-  container.innerHTML = `
+  document.getElementById("question-area").innerHTML = `
     <div class="redo-complete">
       <h2>✓ 错题重做完成</h2>
       <p>你已完成所有错题的重做。</p>
@@ -265,8 +264,7 @@ function showRedoComplete() {
         <span>正确率 ${state.totalAttempts > 0 ? Math.round(state.correctCount/state.totalAttempts*100) : 0}%</span>
       </div>
       <button onclick="exitRedoMode()" class="btn btn-primary">返回普通练习</button>
-    </div>
-  `;
+    </div>`;
   state.mode = "normal";
   updateErrorBadge();
 }
@@ -275,8 +273,14 @@ function exitRedoMode() {
   state.mode = "normal";
   state.errorQueue = [];
   state.currentRedoIndex = 0;
+  rebuildQuestionDOM();
+  handleNewQuestion(getTenseFilter(), getVerbTypeFilter());
+  updateStats();
+  updateErrorBadge();
+}
+window.exitRedoMode = exitRedoMode;
 
-  // 重建 question-area DOM
+function rebuildQuestionDOM() {
   document.getElementById("question-area").innerHTML = `
     <div class="question-header">
       <span class="verb-display" id="verb-display"></span>
@@ -290,109 +294,79 @@ function exitRedoMode() {
         <button id="next-btn" class="btn btn-secondary" style="display:none" onclick="nextQuestion()">下一题 →</button>
       </div>
       <div id="feedback" class="feedback hidden"></div>
-    </div>
-  `;
-  newQuestion(getTenseFilter(), getVerbTypeFilter());
-  updateStats();
-  updateErrorBadge();
+    </div>`;
 }
 
-// ============================================
-// 界面渲染 — 错题本
-// ============================================
-
-function refreshErrorView() {
-  const errors = loadErrors();
+// ── 错题本视图 ──
+async function refreshErrorView() {
+  const errors = await loadErrors();
   const container = document.getElementById("error-list");
   const countLabel = document.getElementById("error-count-label");
-
   countLabel.textContent = `共 ${errors.length} 题`;
-
   if (errors.length === 0) {
     container.innerHTML = '<div class="error-empty"><span class="big-icon">🎉</span>暂无错题</div>';
     return;
   }
-
-  // 按时间倒序显示
   container.innerHTML = errors.slice().reverse().map((e, displayIdx) => {
     const realIdx = errors.length - 1 - displayIdx;
-    const timeStr = formatTime(e.timestamp);
+    const timeStr = e.timestamp ? new Date(e.timestamp).toLocaleString() : '';
     const genderTag = e.gender === "f" ? " (f)" : e.gender === "m" ? " (m)" : "";
-    return `
-      <div class="error-item">
-        <div class="error-info">
-          <div class="error-verb">
-            <span class="error-verb-name">${e.verbInfinitive}</span>
-            <span class="error-tag">${e.tenseLabel}</span>
-            <span class="error-person-tag">${e.personLabel}${genderTag}</span>
-          </div>
-          <div class="error-attempt">
-            <span class="error-wrong-ans">${e.userAnswer}</span>
-            <span class="error-arrow-icon">→</span>
-            <span class="error-right-ans">${e.correctAnswer}</span>
-          </div>
-          <div class="error-time">${timeStr}</div>
+    return `<div class="error-item">
+      <div class="error-info">
+        <div class="error-verb">
+          <span class="error-verb-name">${e.verbInfinitive}</span>
+          <span class="error-tag">${e.tenseLabel}</span>
+          <span class="error-person-tag">${e.personLabel}${genderTag}</span>
         </div>
-        <button class="error-redo-btn" onclick="redoOneFromErrorView(${realIdx})">重做此题</button>
+        <div class="error-attempt">
+          <span class="error-wrong-ans">${e.userAnswer}</span>
+          <span class="error-arrow-icon">→</span>
+          <span class="error-right-ans">${e.correctAnswer}</span>
+        </div>
+        <div class="error-time">${timeStr}</div>
       </div>
-    `;
+      <button class="error-redo-btn" onclick="redoOneFromErrorView(${realIdx})">重做此题</button>
+    </div>`;
   }).join("");
 }
-
-function formatTime(ts) {
-  if (!ts) return "";
-  const d = new Date(ts);
-  const pad = n => String(n).padStart(2, "0");
-  return `${d.getMonth() + 1}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
+window.refreshErrorView = refreshErrorView;
 
 function redoOneFromErrorView(index) {
-  const errors = loadErrors();
-  const err = errors[index];
-  if (!err) return;
+  (async () => {
+    const errors = await loadErrors();
+    const err = errors[index];
+    if (!err) return;
 
-  // 构造成重做队列（只有这一题）
-  state.mode = "redo";
-  state.errorQueue = [err];
-  state.currentRedoIndex = 0;
-  state.totalAttempts = 0;
-  state.correctCount = 0;
-  state.answered = false;
+    state.mode = "redo";
+    state.errorQueue = [err];
+    state.currentRedoIndex = 0;
+    state.totalAttempts = 0;
+    state.correctCount = 0;
+    state.answered = false;
 
-  const verb = findVerb(err.verbInfinitive);
-  if (!verb) {
-    alert("找不到这个动词");
-    state.mode = "normal";
-    return;
-  }
-
-  const person = PERSONS.find(p => p.id === err.personId);
-  state.currentQuestion = {
-    verb: verb,
-    tenseId: err.tenseId,
-    tenseLabel: err.tenseLabel,
-    person: person,
-    gender: err.gender || "m",
-    answer: err.correctAnswer,
-    errorIndex: 0,
-    errorRecord: err
-  };
-  state.answered = false;
-
-  // 切回练习视图渲染
-  switchView("practice");
-  renderQuestion();
-  updateStats();
+    const person = { id: err.personId, label: err.personLabel };
+    state.currentQuestion = {
+      verbInfinitive: err.verbInfinitive,
+      tenseId: err.tenseId,
+      tenseLabel: err.tenseLabel,
+      person: person,
+      gender: err.gender || "m",
+      answer: err.correctAnswer,
+      errorIndex: 0,
+      errorRecord: err
+    };
+    state.answered = false;
+    switchView("practice");
+    renderQuestion();
+    updateStats();
+  })();
 }
+window.redoOneFromErrorView = redoOneFromErrorView;
 
-function redoAllFromErrorView() {
-  enterRedoMode();
-}
+function redoAllFromErrorView() { enterRedoMode(); }
+window.redoAllFromErrorView = redoAllFromErrorView;
 
-// ============================================
-// 统计 & 徽章更新
-// ============================================
-
+// ── 统计 ──
 function updateStats() {
   document.getElementById("total-count").textContent = state.totalAttempts;
   document.getElementById("correct-count").textContent = state.correctCount;
@@ -400,10 +374,10 @@ function updateStats() {
   document.getElementById("accuracy-rate").textContent = rate + "%";
 }
 
-function updateErrorBadge() {
-  const count = loadErrors().length;
+async function updateErrorBadge() {
+  const errors = await loadErrors();
   const badge = document.getElementById("tab-error-count");
-  if (badge) badge.textContent = count;
+  if (badge) badge.textContent = errors.length;
 }
 
 function getTenseFilter() {
@@ -418,35 +392,34 @@ function getVerbTypeFilter() {
 
 function onFilterChange() {
   if (state.mode === "normal" && state.currentView === "practice") {
-    newQuestion(getTenseFilter(), getVerbTypeFilter());
+    handleNewQuestion(getTenseFilter(), getVerbTypeFilter());
   }
 }
+window.onFilterChange = onFilterChange;
 
-// ============================================
-// 事件绑定 & 入口
-// ============================================
-
+// ── 入口 ──
 function handleSubmit() {
   const input = document.getElementById("answer-input");
   checkAnswer(input.value);
 }
+window.handleSubmit = handleSubmit;
 
-function initApp() {
-  // 键盘绑定
+async function initApp() {
   document.addEventListener("keydown", function(e) {
     if (e.key === "Enter") {
       const submitBtn = document.getElementById("submit-btn");
       const nextBtn = document.getElementById("next-btn");
-      if (!submitBtn.disabled) {
-        handleSubmit();
-      } else if (nextBtn.style.display !== "none") {
-        nextQuestion();
-      }
+      if (!submitBtn.disabled) { handleSubmit(); }
+      else if (nextBtn.style.display !== "none") { nextQuestion(); }
     }
   });
 
-  // 初始状态
-  newQuestion(null, getVerbTypeFilter());
-  updateStats();
   updateErrorBadge();
+  handleNewQuestion(null, getVerbTypeFilter());
+  updateStats();
 }
+
+window.initApp = initApp;
+
+// 模块脚本自动延迟到 DOM 就绪后执行
+initApp();
