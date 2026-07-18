@@ -1,0 +1,18 @@
+{
+  "name": "italian-verbs-worker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "db:create": "wrangler d1 create italian-verbs-db",
+    "db:init": "wrangler d1 execute italian-verbs-db --file=schema.sql"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

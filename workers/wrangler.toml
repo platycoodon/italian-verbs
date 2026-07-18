@@ -1,0 +1,12 @@
+name = "italian-verbs-api"
+main = "src/worker.js"
+compatibility_date = "2025-04-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "italian-verbs-db"
+database_id = ""
+
+# 部署后需要把你的域名加到 CORS 允许列表
+# [vars]
+# FRONTEND_URL = "https://platycoodon.github.io"
